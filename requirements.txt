@@ -1,0 +1,3 @@
+Elixir==0.7.1
+SQLAlchemy==0.7.8
+Twisted==13.2.0
