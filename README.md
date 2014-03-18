@@ -57,7 +57,7 @@ If you want to bind it to port 53 you have to:
 Example iptables rules to redirect traffic:
 
     iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 53 -j REDIRECT --to-ports 5053
-    iptables -t nat -A PREROUTING -i eth0 -p ucp --dport 53 -j REDIRECT --to-ports 5053
+    iptables -t nat -A PREROUTING -i eth0 -p udp --dport 53 -j REDIRECT --to-ports 5053
 
 Some other arguments are optional:
 
