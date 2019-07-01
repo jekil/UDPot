@@ -11,10 +11,9 @@ before working as a sinkhole; after a configurable timeout, it can restart the l
 
 ## Requirements
 
-The script is developed for Python 2.7 and the following libraries are required:
+The script is developed for Python 3 and the following libraries are required:
 
  * twisted
- * elixir
  * sqlalchemy
 
 You can install them with (you need python-dev package to compile them):
