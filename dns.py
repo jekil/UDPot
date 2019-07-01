@@ -24,24 +24,30 @@ try:
     from twisted.names import dns
     from twisted.names import client, server
 except ImportError as e:
-    print "Twisted requirement is missing, please install it with `pip install twisted`. Error: %s" % e
+    print("Twisted requirement is missing, please install it with `pip install twisted`. Error: %s" % e)
     sys.exit()
 
 try:
-    from elixir import *
+    from sqlalchemy import create_engine
+    from sqlalchemy.ext.declarative import declarative_base
+    from sqlalchemy import Column, Integer, String, DateTime
+    from sqlalchemy.orm import Session
+    Base = declarative_base()
 except ImportError as e:
-    print "Elixir requirement is missing, please install it with `pip install elixir`. Error: %s" % e
+    print("SQLAlchemy requirement is missing, please install it with `pip install sqlalchemy`. Error: %s" % e)
     sys.exit()
 
 
-class Dns(Entity):
+class Dns(Base):
     """Log table for DNS entries."""
-    src = Field(Unicode(255))
-    src_port = Field(Integer)
-    dns_name = Field(Unicode(255))
-    dns_type = Field(Unicode(255))
-    dns_cls = Field(Unicode(255))
-    created_at = Field(DateTime, default=datetime.now)
+    __tablename__ = "dns"
+    id = Column(Integer, primary_key=True)
+    src = Column(String)
+    src_port = Column(Integer)
+    dns_name = Column(String)
+    dns_type = Column(String)
+    dns_cls = Column(String)
+    created_at = Column(DateTime, default=datetime.now)
 
 class HoneyDNSServerFactory(server.DNSServerFactory):
     """DNS honeypot.
@@ -57,11 +63,11 @@ class HoneyDNSServerFactory(server.DNSServerFactory):
     def messageReceived(self, message, proto, address=None):
         # Log info.
         entry = {}
-        entry["src_ip"] = unicode(address[0])
-        entry["src_port"] = unicode(address[1])
-        entry["dns_name"] = unicode(message.queries[0].name.name)
-        entry["dns_type"] = unicode(dns.QUERY_TYPES.get(message.queries[0].type, dns.EXT_QUERIES.get(message.queries[0].type, "UNKNOWN (%d)" % message.queries[0].type)))
-        entry["dns_cls"] = unicode(dns.QUERY_CLASSES.get(message.queries[0].cls, "UNKNOWN (%d)" % message.queries[0].cls))
+        entry["src_ip"] = address[0]
+        entry["src_port"] = address[1]
+        entry["dns_name"] = message.queries[0].name.name
+        entry["dns_type"] = dns.QUERY_TYPES.get(message.queries[0].type, dns.EXT_QUERIES.get(message.queries[0].type, "UNKNOWN (%d)" % message.queries[0].type))
+        entry["dns_cls"] = dns.QUERY_CLASSES.get(message.queries[0].cls, "UNKNOWN (%d)" % message.queries[0].cls)
         self.log(entry)
 
         # Forward the request to the DNS server only if match set conditions,
@@ -80,8 +86,9 @@ class HoneyDNSServerFactory(server.DNSServerFactory):
 
     def log(self, data):
         if opts.verbose:
-            print data
-        Dns(src=data["src_ip"], src_port=data["src_port"], dns_name=data["dns_name"], dns_type=data["dns_type"], dns_cls=data["dns_cls"])
+            print(data)
+        record = Dns(src=data["src_ip"], src_port=data["src_port"], dns_name=data["dns_name"], dns_type=data["dns_type"], dns_cls=data["dns_cls"])
+        session.add(record)
         session.commit()
 
 
@@ -95,13 +102,12 @@ parser.add_argument("-v", "--verbose", action="store_true", help="print each req
 opts = parser.parse_args()
 
 # DB setup.
-metadata.bind = opts.sql
-# SQL statement debug, set to True to print SQL statements.
-metadata.bind.echo = False
+engine = create_engine(opts.sql, echo=False)
+global session
+session = Session(engine)
 
 # Create db.
-setup_all()
-create_all()
+Base.metadata.create_all(engine)
 
 verbosity = 3
 
