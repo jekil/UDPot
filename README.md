@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/jekil/UDPot.svg?branch=master)](https://travis-ci.org/jekil/UDPot)
+
 # dns.py
 
 The idea behind this script is to provide a DNS honeypot which logs all requests to a SQLite database and with a
