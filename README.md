@@ -12,6 +12,21 @@ it acts as a sinkhole.
 For each request coming from a source IP only a custom number of requests are really resolved (sending back a DNS reply)
 before working as a sinkhole; after a configurable timeout, it can restart the loop.
 
+## Docker
+
+A docker image is available on [DockerHub](https://hub.docker.com/r/jekil/udpot).
+Run it with:
+
+    docker run --name udpot -d jekil/udpot
+
+### Variables
+
+- *DNS_SERVER*: host for DNS resolution
+
+### Volumes
+
+- *data*: where SQLite database is stored
+
 ## Requirements
 
 The script is developed for Python 3 and the following libraries are required:
