@@ -17,7 +17,7 @@ before working as a sinkhole; after a configurable timeout, it can restart the l
 A docker image is available on [DockerHub](https://hub.docker.com/r/jekil/udpot).
 Run it with:
 
-    docker run --name udpot -p 5053:5053 -d jekil/udpot
+    docker run --name udpot -p 5053:5053/udp -d jekil/udpot
     
 It will run UDPot on port 5053, if you want to use it on another port you can bind it with docker or redirect it with iptables (explained below).
 
