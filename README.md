@@ -9,8 +9,8 @@ configurable interactivity level.
 It can be configured to resolve only a number of DNS requests to seems like an open resolver to an attacker, after that
 it acts as a sinkhole.
 
-For each request coming from a source IP only a custom number of requests are really resolved (sending back a DNS reply)
-before working as a sinkhole; after a configurable timeout, it can restart the loop.
+For each request coming from a source IP only a custom number of requests (default 3) are really resolved (sending back a DNS reply)
+before working as a sinkhole; after a configurable timeout (default 1 day), it can restart the loop.
 
 ## Docker
 
