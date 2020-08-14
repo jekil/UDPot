@@ -58,7 +58,7 @@ You can print the option list using the help **-h** option:
       -c REQ_COUNT, --req-count REQ_COUNT
                             how many request to resolve
       -t REQ_TIMEOUT, --req-timeout REQ_TIMEOUT
-                            how many seconds until we start resolving requests for this client again
+                            timeout to re-start resolving requests
       -s, --sql             database connection string
       -v, --verbose         print each request
 
