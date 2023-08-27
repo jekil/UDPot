@@ -63,8 +63,12 @@ class HoneyDNSServerFactory(server.DNSServerFactory):
     def messageReceived(self, message, proto, address=None):
         # Log info.
         entry = {}
-        entry["src_ip"] = address[0]
-        entry["src_port"] = address[1]
+        if address != None: # UDP
+            entry["src_ip"] = address[0]
+            entry["src_port"] = address[1]
+        else:               # TCP
+            entry["src_ip"] = proto.transport.getPeer().host
+            entry["src_port"] = proto.transport.getPeer().port
         entry["dns_name"] = message.queries[0].name.name
         entry["dns_type"] = dns.QUERY_TYPES.get(message.queries[0].type, dns.EXT_QUERIES.get(message.queries[0].type, "UNKNOWN (%d)" % message.queries[0].type))
         entry["dns_cls"] = dns.QUERY_CLASSES.get(message.queries[0].cls, "UNKNOWN (%d)" % message.queries[0].cls)
