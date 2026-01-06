@@ -3,8 +3,7 @@
 
 # dns.py
 
-The idea behind this script is to provide a DNS honeypot which logs all requests to a SQLite database and with a
-configurable interactivity level.
+The idea behind this script is to provide a DNS honeypot which logs all requests to a SQLite database and/or JSON file with a configurable interactivity level.
 
 It can be configured to resolve only a number of DNS requests to seems like an open resolver to an attacker, after that
 it acts as a sinkhole.
@@ -45,8 +44,9 @@ You can install them with (you need python-dev package to compile them):
 You can print the option list using the help **-h** option:
 
     $ python dns.py -h
-    usage: dns.py [-h] [-p DNS_PORT] [-c REQ_COUNT] [-t REQ_TIMEOUT] [-s] [-v]
-                    server
+    usage: dns.py [-h] [-p DNS_PORT] [-c REQ_COUNT] [-t REQ_TIMEOUT] [-s SQL]
+                  [-j JSON_LOG] [-v] [--verbosity {0,1,2,3}]
+                  server
 
     positional arguments:
       server                DNS server IP address
@@ -54,13 +54,17 @@ You can print the option list using the help **-h** option:
     optional arguments:
       -h, --help            show this help message and exit
       -p DNS_PORT, --dns-port DNS_PORT
-                            DNS honeypot port
+                            DNS honeypot port (default: 5053)
       -c REQ_COUNT, --req-count REQ_COUNT
-                            how many request to resolve
+                            how many request to resolve (default: 3)
       -t REQ_TIMEOUT, --req-timeout REQ_TIMEOUT
-                            timeout to re-start resolving requests
-      -s, --sql             database connection string
+                            timeout to re-start resolving requests (default: 86400)
+      -s SQL, --sql SQL     database connection string (default: sqlite:///db.sqlite3)
+      -j JSON_LOG, --json-log JSON_LOG
+                            JSON log file path (optional, JSONL format)
       -v, --verbose         print each request
+      --verbosity {0,1,2,3}
+                            verbosity level (default: 0)
 
 You can run the DNS honeypot with the following command, you have to add the IP of the DNS server you use to resolve
 the first bunch of queries to seems like an open resolver (in this example we use 8.8.8.8):
@@ -80,8 +84,57 @@ Example iptables rules to redirect traffic:
 
 Some other arguments are optional:
 
- * **-p** is used to bind DNS honeypot service on a given port
- * **-c** how many requests should be resolved (sending a DNS reply) like a real open resolver
- * **-t** timeout to re-start resolving requests (sending a DNS reply) like a real open resolver
- * **-s** choose a SQL database (default SQLite)
- * **-v** verbose logging (prints each request)
+ * **-p** is used to bind DNS honeypot service on a given port (default: 5053)
+ * **-c** how many requests should be resolved (sending a DNS reply) like a real open resolver (default: 3)
+ * **-t** timeout to re-start resolving requests (sending a DNS reply) like a real open resolver (default: 86400 seconds = 1 day)
+ * **-s** choose a SQL database connection string (default: sqlite:///db.sqlite3)
+ * **-j** enable JSON logging to file in JSONL format (one JSON object per line)
+ * **-v** verbose logging (prints each request to stdout)
+ * **--verbosity** set the Twisted framework verbosity level (0-3)
+
+## Logging Options
+
+UDPot supports multiple logging backends that can be used independently or together:
+
+### SQLite Database (default)
+
+By default, all DNS requests are logged to a SQLite database (`db.sqlite3`). Each entry includes:
+- Transport protocol (UDP/TCP)
+- Source IP and port
+- DNS query name, type, and class
+- Timestamp
+
+### JSON Lines Format
+
+Enable JSON logging with the `-j` option to write logs in JSONL format (newline-delimited JSON):
+
+    $ python dns.py 8.8.8.8 -j dns_logs.jsonl
+
+Each line is a valid JSON object:
+
+```json
+{"timestamp": "2026-01-06T10:30:45.123456+00:00", "transport": "UDP", "src_ip": "192.168.1.100", "src_port": 54321, "dns_name": "example.com", "dns_type": "A", "dns_cls": "IN"}
+```
+
+You can use both SQLite and JSON logging simultaneously:
+
+    $ python dns.py 8.8.8.8 -j dns_logs.jsonl -v
+
+Or disable SQLite and use only JSON:
+
+    $ python dns.py 8.8.8.8 -s "" -j dns_logs.jsonl
+
+### Processing JSON Logs
+
+JSONL files can be easily processed with tools like `jq`:
+
+```bash
+# Count requests by source IP
+cat dns_logs.jsonl | jq -r .src_ip | sort | uniq -c | sort -rn
+
+# Filter only A record queries
+cat dns_logs.jsonl | jq 'select(.dns_type == "A")'
+
+# Get unique queried domains
+cat dns_logs.jsonl | jq -r .dns_name | sort -u
+```

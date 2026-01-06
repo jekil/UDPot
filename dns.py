@@ -16,6 +16,7 @@
 
 import sys
 import argparse
+import json
 from datetime import datetime, timezone
 
 try:
@@ -112,13 +113,33 @@ class HoneyDNSServerFactory(server.DNSServerFactory):
     def log(self, data):
         if opts.verbose:
             print(data)
-        try:
-            record = Dns(src=data["src_ip"], src_port=data["src_port"], dns_name=data["dns_name"], dns_type=data["dns_type"], dns_cls=data["dns_cls"])
-            session.add(record)
-            session.commit()
-        except Exception as e:
-            session.rollback()
-            print(f"Database error: {e}")
+
+        # Log to SQLite database
+        if opts.sql:
+            try:
+                record = Dns(transport=data["transport"], src=data["src_ip"], src_port=data["src_port"], dns_name=data["dns_name"], dns_type=data["dns_type"], dns_cls=data["dns_cls"])
+                session.add(record)
+                session.commit()
+            except Exception as e:
+                session.rollback()
+                print(f"Database error: {e}")
+
+        # Log to JSON file
+        if opts.json_log:
+            try:
+                log_entry = {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "transport": data["transport"],
+                    "src_ip": data["src_ip"],
+                    "src_port": data["src_port"],
+                    "dns_name": data["dns_name"],
+                    "dns_type": data["dns_type"],
+                    "dns_cls": data["dns_cls"]
+                }
+                with open(opts.json_log, 'a') as f:
+                    f.write(json.dumps(log_entry) + '\n')
+            except Exception as e:
+                print(f"JSON logging error: {e}")
 
 
 parser = argparse.ArgumentParser()
@@ -127,6 +148,7 @@ parser.add_argument("-p", "--dns-port", type=int, default=5053, help="DNS honeyp
 parser.add_argument("-c", "--req-count", type=int, default=3, help="how many request to resolve")
 parser.add_argument("-t", "--req-timeout", type=int, default=86400, help="timeout to re-start resolving requests")
 parser.add_argument("-s", "--sql", type=str, default="sqlite:///db.sqlite3", help="database connection string")
+parser.add_argument("-j", "--json-log", type=str, help="JSON log file path (optional)")
 parser.add_argument("-v", "--verbose", action="store_true", help="print each request")
 parser.add_argument("--verbosity", type=int, default=0, choices=[0, 1, 2, 3], help="verbosity level (0-3)")
 opts = parser.parse_args()
