@@ -16,7 +16,7 @@
 
 import sys
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 
 try:
     from twisted.internet.protocol import Factory, Protocol
@@ -31,7 +31,7 @@ try:
     from sqlalchemy import create_engine
     from sqlalchemy.ext.declarative import declarative_base
     from sqlalchemy import Column, Integer, String, DateTime
-    from sqlalchemy.orm import Session
+    from sqlalchemy.orm import sessionmaker
     Base = declarative_base()
 except ImportError as e:
     print("SQLAlchemy requirement is missing, please install it with `pip install sqlalchemy`. Error: %s" % e)
@@ -47,7 +47,7 @@ class Dns(Base):
     dns_name = Column(String)
     dns_type = Column(String)
     dns_cls = Column(String)
-    created_at = Column(DateTime, default=datetime.now)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class HoneyDNSServerFactory(server.DNSServerFactory):
     """DNS honeypot.
@@ -60,7 +60,25 @@ class HoneyDNSServerFactory(server.DNSServerFactory):
     # CLI options.
     opts = None
 
+    def cleanup_old_entries(self):
+        """Remove expired entries from request_log to prevent memory leak."""
+        now = datetime.now()
+        expired_ips = [
+            ip for ip, data in self.request_log.items()
+            if (now - data["last_seen"]).total_seconds() > self.opts.req_timeout
+        ]
+        for ip in expired_ips:
+            del self.request_log[ip]
+
     def messageReceived(self, message, proto, address=None):
+        # Validate that we have queries to process.
+        if not message.queries:
+            return
+
+        # Periodically cleanup old entries (every 100 requests).
+        if len(self.request_log) % 100 == 0:
+            self.cleanup_old_entries()
+
         # Log info.
         entry = {}
         entry["src_ip"] = address[0]
@@ -81,15 +99,19 @@ class HoneyDNSServerFactory(server.DNSServerFactory):
                 self.request_log[entry["src_ip"]]["last_seen"] = datetime.now()
                 return
         else:
-            self.request_log[entry["src_ip"]] = {"count": 1, "last_seen": 0, "last_seen": datetime.now()}
+            self.request_log[entry["src_ip"]] = {"count": 1, "last_seen": datetime.now()}
             return server.DNSServerFactory.messageReceived(self, message, proto, address)
 
     def log(self, data):
         if opts.verbose:
             print(data)
-        record = Dns(src=data["src_ip"], src_port=data["src_port"], dns_name=data["dns_name"], dns_type=data["dns_type"], dns_cls=data["dns_cls"])
-        session.add(record)
-        session.commit()
+        try:
+            record = Dns(src=data["src_ip"], src_port=data["src_port"], dns_name=data["dns_name"], dns_type=data["dns_type"], dns_cls=data["dns_cls"])
+            session.add(record)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"Database error: {e}")
 
 
 parser = argparse.ArgumentParser()
@@ -99,24 +121,23 @@ parser.add_argument("-c", "--req-count", type=int, default=3, help="how many req
 parser.add_argument("-t", "--req-timeout", type=int, default=86400, help="timeout to re-start resolving requests")
 parser.add_argument("-s", "--sql", type=str, default="sqlite:///db.sqlite3", help="database connection string")
 parser.add_argument("-v", "--verbose", action="store_true", help="print each request")
+parser.add_argument("--verbosity", type=int, default=0, choices=[0, 1, 2, 3], help="verbosity level (0-3)")
 opts = parser.parse_args()
 
 # DB setup.
 engine = create_engine(opts.sql, echo=False)
-global session
-session = Session(engine)
+SessionLocal = sessionmaker(bind=engine)
+session = SessionLocal()
 
 # Create db.
 Base.metadata.create_all(engine)
 
-verbosity = 3
-
 # Create DNS honeypot.
 resolver = client.Resolver(servers=[(opts.server, 53)])
-factory = HoneyDNSServerFactory(clients=[resolver], verbose=verbosity)
+factory = HoneyDNSServerFactory(clients=[resolver], verbose=opts.verbosity)
 factory.opts = opts
 protocol = dns.DNSDatagramProtocol(factory)
-factory.noisy = protocol.noisy = verbosity
+factory.noisy = protocol.noisy = opts.verbosity
 
 # Bind and run on UDP and TCP.
 reactor.listenUDP(opts.dns_port, protocol)
