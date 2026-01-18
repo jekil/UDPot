@@ -1,4 +1,3 @@
-[![Build Status](https://travis-ci.org/jekil/UDPot.svg?branch=master)](https://travis-ci.org/jekil/UDPot)
 [![Twitter Follow](https://img.shields.io/twitter/follow/jekil.svg?style=social)](https://twitter.com/jekil)
 
 # dns.py
