@@ -44,7 +44,7 @@ You can print the option list using the help **-h** option:
 
     $ python dns.py -h
     usage: dns.py [-h] [-p DNS_PORT] [-c REQ_COUNT] [-t REQ_TIMEOUT] [-s SQL]
-                  [-j JSON_LOG] [-v] [--verbosity {0,1,2,3}]
+                  [-j JSON_LOG] [-r] [-v] [--verbosity {0,1,2,3}]
                   server
 
     positional arguments:
@@ -61,6 +61,7 @@ You can print the option list using the help **-h** option:
       -s SQL, --sql SQL     database connection string (default: sqlite:///db.sqlite3)
       -j JSON_LOG, --json-log JSON_LOG
                             JSON log file path (optional, JSONL format)
+      -r, --json-rotate     enable daily rotation for JSON logs
       -v, --verbose         print each request
       --verbosity {0,1,2,3}
                             verbosity level (default: 0)
@@ -88,6 +89,7 @@ Some other arguments are optional:
  * **-t** timeout to re-start resolving requests (sending a DNS reply) like a real open resolver (default: 86400 seconds = 1 day)
  * **-s** choose a SQL database connection string (default: sqlite:///db.sqlite3)
  * **-j** enable JSON logging to file in JSONL format (one JSON object per line)
+ * **-r** enable daily rotation for JSON logs with automatic gzip compression of old logs
  * **-v** verbose logging (prints each request to stdout)
  * **--verbosity** set the Twisted framework verbosity level (0-3)
 
@@ -123,6 +125,22 @@ Or disable SQLite and use only JSON:
 
     $ python dns.py 8.8.8.8 -s "" -j dns_logs.jsonl
 
+### Daily Log Rotation
+
+Enable daily log rotation with the `-r` option:
+
+    $ python dns.py 8.8.8.8 -j dns_logs.jsonl -r
+
+This creates daily log files with date suffixes:
+
+```
+dns_logs.2026-01-16.jsonl.gz  # Automatically compressed
+dns_logs.2026-01-17.jsonl.gz  # Automatically compressed
+dns_logs.2026-01-18.jsonl     # Today's log (uncompressed)
+```
+
+Old log files are automatically compressed to gzip format at the start of each new day, saving disk space while preserving all historical data.
+
 ### Processing JSON Logs
 
 JSONL files can be easily processed with tools like `jq`:
@@ -136,4 +154,7 @@ cat dns_logs.jsonl | jq 'select(.dns_type == "A")'
 
 # Get unique queried domains
 cat dns_logs.jsonl | jq -r .dns_name | sort -u
+
+# Process compressed logs
+zcat dns_logs.2026-01-16.jsonl.gz | jq -r .src_ip | sort | uniq -c
 ```

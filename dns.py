@@ -15,6 +15,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
+import os
+import glob
+import gzip
+import shutil
 import argparse
 import json
 from datetime import datetime, timezone
@@ -61,6 +65,8 @@ class HoneyDNSServerFactory(server.DNSServerFactory):
     request_log = {}
     # CLI options.
     opts = None
+    # Track last compression date to avoid repeated compression
+    last_compression_date = None
 
     def cleanup_old_entries(self):
         """Remove expired entries from request_log to prevent memory leak."""
@@ -136,10 +142,39 @@ class HoneyDNSServerFactory(server.DNSServerFactory):
                     "dns_type": data["dns_type"],
                     "dns_cls": data["dns_cls"]
                 }
-                with open(opts.json_log, 'a') as f:
+                log_file = opts.json_log
+                if opts.json_rotate:
+                    # Add date suffix for daily rotation (e.g., dns_logs.2026-01-18.jsonl)
+                    base, ext = os.path.splitext(opts.json_log)
+                    today = datetime.now().strftime('%Y-%m-%d')
+                    log_file = f"{base}.{today}{ext}"
+                    # Compress old log files only once per day
+                    if self.last_compression_date != today:
+                        self.compress_old_logs(base, ext, today)
+                        self.last_compression_date = today
+                with open(log_file, 'a') as f:
                     f.write(json.dumps(log_entry) + '\n')
             except Exception as e:
                 print(f"JSON logging error: {e}")
+
+    def compress_old_logs(self, base, ext, today):
+        """Compress old rotated log files to gzip."""
+        pattern = f"{base}.*{ext}"
+        for log_path in glob.glob(pattern):
+            # Skip today's log and already compressed files
+            if today in log_path or log_path.endswith('.gz'):
+                continue
+            try:
+                gz_path = f"{log_path}.gz"
+                if not os.path.exists(gz_path):
+                    with open(log_path, 'rb') as f_in:
+                        with gzip.open(gz_path, 'wb') as f_out:
+                            shutil.copyfileobj(f_in, f_out)
+                    os.remove(log_path)
+                    if opts.verbose:
+                        print(f"Compressed old log: {log_path} -> {gz_path}")
+            except Exception as e:
+                print(f"Log compression error: {e}")
 
 
 parser = argparse.ArgumentParser()
@@ -149,6 +184,7 @@ parser.add_argument("-c", "--req-count", type=int, default=3, help="how many req
 parser.add_argument("-t", "--req-timeout", type=int, default=86400, help="timeout to re-start resolving requests")
 parser.add_argument("-s", "--sql", type=str, default="sqlite:///db.sqlite3", help="database connection string")
 parser.add_argument("-j", "--json-log", type=str, help="JSON log file path (optional)")
+parser.add_argument("-r", "--json-rotate", action="store_true", help="enable daily rotation for JSON logs")
 parser.add_argument("-v", "--verbose", action="store_true", help="print each request")
 parser.add_argument("--verbosity", type=int, default=0, choices=[0, 1, 2, 3], help="verbosity level (0-3)")
 opts = parser.parse_args()
