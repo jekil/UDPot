@@ -97,7 +97,8 @@ class HoneyDNSServerFactory(server.DNSServerFactory):
             entry["transport"] = "TCP"
             entry["src_ip"] = proto.transport.getPeer().host
             entry["src_port"] = proto.transport.getPeer().port
-        entry["dns_name"] = message.queries[0].name.name
+        dns_name = message.queries[0].name.name
+        entry["dns_name"] = dns_name.decode('utf-8') if isinstance(dns_name, bytes) else dns_name
         entry["dns_type"] = dns.QUERY_TYPES.get(message.queries[0].type, dns.EXT_QUERIES.get(message.queries[0].type, "UNKNOWN (%d)" % message.queries[0].type))
         entry["dns_cls"] = dns.QUERY_CLASSES.get(message.queries[0].cls, "UNKNOWN (%d)" % message.queries[0].cls)
         self.log(entry)
