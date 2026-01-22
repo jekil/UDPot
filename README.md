@@ -1,6 +1,10 @@
+<p align="center">
+  <img src="docs/logo.png" alt="UDPot Logo">
+</p>
+
 [![Twitter Follow](https://img.shields.io/twitter/follow/jekil.svg?style=social)](https://twitter.com/jekil)
 
-# dns.py
+# UDPot - DNS Honeypot
 
 The idea behind this script is to provide a DNS honeypot which logs all requests to a SQLite database and/or JSON file with a configurable interactivity level.
 
